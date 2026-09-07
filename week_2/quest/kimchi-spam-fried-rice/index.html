@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>김치스팸볶음밥 레시피</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <!-- ⚠️ 모든 CDN 버전 고정: Babel 8.x는 인라인 text/babel 처리가 깨지므로 반드시 7.x 사용 -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+  <style>
+    @keyframes floatUp {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+    .float-emoji { animation: floatUp 3s ease-in-out infinite; }
+    .strike-anim { transition: color 0.2s ease, text-decoration-color 0.2s ease; }
+  </style>
+</head>
+<body class="bg-orange-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+
+    function Button({ children, variant = 'primary', size = 'md', onClick, disabled, className = '', ariaLabel }) {
+      const base = 'inline-flex items-center justify-center font-semibold rounded-xl transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2';
+      const variants = {
+        primary: 'bg-orange-600 text-white hover:bg-orange-700 focus:ring-orange-500',
+        secondary: 'bg-white text-orange-700 border border-orange-300 hover:bg-orange-50 focus:ring-orange-400',
+        ghost: 'bg-transparent text-orange-700 hover:bg-orange-100 focus:ring-orange-300',
+        danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
+      };
+      const sizes = {
+        sm: 'px-3 py-1.5 text-sm',
+        md: 'px-4 py-2 text-base',
+        lg: 'px-6 py-3 text-lg',
+      };
+      return (
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          onClick={onClick}
+          disabled={disabled}
+          className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Card({ children, className = '' }) {
+      return (
+        <div className={`bg-white rounded-2xl shadow-sm border border-orange-100 ${className}`}>
+          {children}
+        </div>
+      );
+    }
+
+    function Badge({ children, color = 'orange' }) {
+      const colors = {
+        orange: 'bg-orange-100 text-orange-800',
+        red: 'bg-red-100 text-red-700',
+        green: 'bg-green-100 text-green-700',
+        gray: 'bg-gray-100 text-gray-700',
+      };
+      return (
+        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${colors[color]}`}>
+          {children}
+        </span>
+      );
+    }
+
+    function ProgressBar({ value, colorClass = 'bg-orange-500' }) {
+      return (
+        <div className="w-full h-2.5 bg-orange-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow={value} aria-valuemin="0" aria-valuemax="100">
+          <div
+            className={`h-full ${colorClass} transition-all duration-300 ease-out rounded-full`}
+            style={{ width: `${value}%` }}
+          />
+        </div>
+      );
+    }
+
+    function Checkbox({ checked, onChange, label, ariaLabel }) {
+      return (
+        <label className="flex items-center gap-3 cursor-pointer select-none group">
+          <span
+            onClick={onChange}
+            role="checkbox"
+            aria-checked={checked}
+            aria-label={ariaLabel}
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onChange(); } }}
+            className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition
+              ${checked ? 'bg-orange-500 border-orange-500' : 'bg-white border-orange-300 group-hover:border-orange-400'}`}
+          >
+            {checked && (
+              <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </span>
+          {label}
+        </label>
+      );
+    }
+
+    // ========================================
+    // 🧩 Common/Layout Components
+    // ========================================
+
+    function Header() {
+      return (
+        <header className="bg-gradient-to-br from-orange-500 via-red-500 to-amber-500 text-white">
+          <div className="max-w-3xl mx-auto px-5 py-12 sm:py-16 text-center">
+            <div className="text-6xl sm:text-7xl float-emoji mb-3" aria-hidden="true">🍚🥘</div>
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">김치스팸볶음밥</h1>
+            <p className="mt-3 text-orange-50 text-sm sm:text-base">
+              냉장고 속 김치와 스팸으로 뚝딱! 자취생을 위한 초간단 한 끼
+            </p>
+          </div>
+        </header>
+      );
+    }
+
+    function Footer() {
+      return (
+        <footer className="text-center text-xs text-orange-400 py-8">
+          맛있게 드세요! 🍽️
+        </footer>
+      );
+    }
+
+    // ========================================
+    // 📄 Page Components
+    // ========================================
+
+    const BASE_SERVINGS = 2;
+
+    const INGREDIENTS = [
+      { id: 'rice', name: '밥', base: 2, unit: '공기', type: 'measure' },
+      { id: 'spam', name: '스팸', base: 0.5, unit: '캔', type: 'measure' },
+      { id: 'kimchi', name: '신김치', base: 1, unit: '컵', type: 'measure' },
+      { id: 'greenonion', name: '대파', base: 0.5, unit: '대', type: 'count' },
+      { id: 'garlic', name: '다진마늘', base: 1, unit: '작은술', type: 'measure' },
+      { id: 'oil', name: '식용유', base: 2, unit: '큰술', type: 'measure' },
+      { id: 'gochujang', name: '고추장', base: 1, unit: '큰술', type: 'measure' },
+      { id: 'gochugaru', name: '고춧가루', base: 1, unit: '작은술', type: 'measure' },
+      { id: 'sugar', name: '설탕', base: 1, unit: '작은술', type: 'measure' },
+      { id: 'sesameoil', name: '참기름', base: 1, unit: '큰술', type: 'measure' },
+      { id: 'egg', name: '계란후라이', base: 2, unit: '개', type: 'count' },
+      { id: 'gimgaru', name: '김가루', base: 0, unit: '약간', type: 'pinch' },
+      { id: 'sesame', name: '깨', base: 0, unit: '약간', type: 'pinch' },
+    ];
+
+    function formatQty(base, multiplier) {
+      const val = base * multiplier;
+      const rounded = Math.round(val * 4) / 4;
+      const whole = Math.floor(rounded + 1e-6);
+      const frac = +(rounded - whole).toFixed(2);
+      const fracMap = { 0.25: '¼', 0.5: '½', 0.75: '¾' };
+      const fracStr = fracMap[frac] || '';
+      if (whole === 0 && !fracStr) return '0';
+      if (whole === 0) return fracStr;
+      return fracStr ? `${whole} ${fracStr}` : `${whole}`;
+    }
+
+    function formatCount(base, multiplier) {
+      return Math.max(1, Math.round(base * multiplier));
+    }
+
+    function ServingsSelector({ servings, setServings }) {
+      return (
+        <Card className="p-5 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-gray-500">인분 선택</p>
+            <p className="text-lg font-bold text-gray-800">{servings}인분</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              ariaLabel="인분 줄이기"
+              onClick={() => setServings((s) => Math.max(1, s - 1))}
+              disabled={servings <= 1}
+            >
+              −
+            </Button>
+            <span className="w-8 text-center text-xl font-bold text-orange-600">{servings}</span>
+            <Button
+              variant="secondary"
+              size="sm"
+              ariaLabel="인분 늘리기"
+              onClick={() => setServings((s) => Math.min(6, s + 1))}
+              disabled={servings >= 6}
+            >
+              +
+            </Button>
+          </div>
+        </Card>
+      );
+    }
+
+    function IngredientsSection({ servings }) {
+      const multiplier = servings / BASE_SERVINGS;
+      const [checked, setChecked] = useState({});
+
+      const toggle = (id) => {
+        setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
+      };
+
+      const checkedCount = INGREDIENTS.filter((i) => checked[i.id]).length;
+      const progress = Math.round((checkedCount / INGREDIENTS.length) * 100);
+
+      return (
+        <section aria-labelledby="ingredients-heading">
+          <div className="flex items-center justify-between mb-3">
+            <h2 id="ingredients-heading" className="text-xl font-bold text-gray-800">🧂 재료</h2>
+            <Badge color={progress === 100 ? 'green' : 'orange'}>
+              {checkedCount}/{INGREDIENTS.length} 준비됨
+            </Badge>
+          </div>
+          <Card className="p-5">
+            <ProgressBar value={progress} colorClass={progress === 100 ? 'bg-green-500' : 'bg-orange-500'} />
+            <ul className="mt-4 divide-y divide-orange-50">
+              {INGREDIENTS.map((ing) => {
+                const qty =
+                  ing.type === 'pinch'
+                    ? '약간'
+                    : ing.type === 'count'
+                    ? `${formatCount(ing.base, multiplier)}${ing.unit}`
+                    : `${formatQty(ing.base, multiplier)}${ing.unit}`;
+                const isChecked = !!checked[ing.id];
+                return (
+                  <li key={ing.id} className="py-3 flex items-center justify-between">
+                    <Checkbox
+                      checked={isChecked}
+                      onChange={() => toggle(ing.id)}
+                      ariaLabel={`${ing.name} 준비 체크`}
+                      label={
+                        <span className={`strike-anim ${isChecked ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                          {ing.name}
+                        </span>
+                      }
+                    />
+                    <span className={`text-sm font-medium ${isChecked ? 'text-gray-300' : 'text-orange-600'}`}>
+                      {qty}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        </section>
+      );
+    }
+
+    const STEPS = [
+      { emoji: '🔪', text: '스팸은 사방 1cm 크기로 깍둑썰고, 김치는 잘게 썰고, 대파는 송송 썬다.' },
+      { emoji: '🧄', text: '팬에 식용유를 두르고 중약불에서 다진마늘과 대파 흰 부분을 볶아 파기름을 낸다.' },
+      { emoji: '🥓', text: '스팸을 넣고 겉면이 노릇해질 때까지 볶는다.' },
+      { emoji: '🌶️', text: '김치를 넣고 2~3분 볶아 신맛을 날린 뒤, 고추장·고춧가루·설탕을 넣어 양념이 배도록 볶는다.' },
+      { emoji: '🍚', text: '밥을 넣고 주걱으로 누르듯 펴가며 강불에서 골고루 볶는다.' },
+      { emoji: '✨', text: '불을 끄고 참기름을 둘러 향을 낸 뒤, 그릇에 담아 김가루·깨·계란후라이를 올려 완성한다.' },
+    ];
+
+    function StepsSection() {
+      const [done, setDone] = useState({});
+      const toggle = (idx) => setDone((prev) => ({ ...prev, [idx]: !prev[idx] }));
+      const doneCount = Object.values(done).filter(Boolean).length;
+      const progress = Math.round((doneCount / STEPS.length) * 100);
+      const finished = progress === 100;
+
+      return (
+        <section aria-labelledby="steps-heading">
+          <div className="flex items-center justify-between mb-3">
+            <h2 id="steps-heading" className="text-xl font-bold text-gray-800">👩‍🍳 조리 순서</h2>
+            <Badge color={finished ? 'green' : 'orange'}>
+              {finished ? '완성!' : `${doneCount}/${STEPS.length} 단계`}
+            </Badge>
+          </div>
+          <Card className="p-5">
+            <ProgressBar value={progress} colorClass={finished ? 'bg-green-500' : 'bg-orange-500'} />
+            <ol className="mt-4 space-y-3">
+              {STEPS.map((step, idx) => {
+                const isDone = !!done[idx];
+                return (
+                  <li
+                    key={idx}
+                    onClick={() => toggle(idx)}
+                    className={`flex gap-3 p-3 rounded-xl border cursor-pointer transition
+                      ${isDone ? 'bg-green-50 border-green-200' : 'bg-orange-50/40 border-orange-100 hover:border-orange-300'}`}
+                  >
+                    <span
+                      className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold
+                        ${isDone ? 'bg-green-500 text-white' : 'bg-orange-200 text-orange-800'}`}
+                    >
+                      {isDone ? '✓' : idx + 1}
+                    </span>
+                    <p className={`text-sm sm:text-base leading-relaxed strike-anim ${isDone ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                      <span className="mr-1" aria-hidden="true">{step.emoji}</span>
+                      {step.text}
+                    </p>
+                  </li>
+                );
+              })}
+            </ol>
+            {finished && (
+              <p className="mt-4 text-center text-green-600 font-semibold">
+                🎉 김치스팸볶음밥 완성! 맛있게 드세요!
+              </p>
+            )}
+          </Card>
+        </section>
+      );
+    }
+
+    const TIPS = [
+      {
+        title: '🥩 재료 응용하기',
+        body: '스팸 대신 베이컨이나 참치, 소시지로 바꿔도 잘 어울려요. 냉장고에 있는 자투리 채소(당근, 양파, 애호박)를 잘게 썰어 넣으면 더 든든한 한 끼가 됩니다.',
+      },
+      {
+        title: '🌶️ 더 매콤하게 즐기려면',
+        body: '청양고추 1개를 잘게 썰어 스팸과 함께 볶아보세요. 마지막에 청양고추 슬라이스를 고명으로 올리면 알싸한 매운맛이 배가됩니다.',
+      },
+      {
+        title: '🧀 치즈 볶음밥으로 변신',
+        body: '완성된 볶음밥 위에 슬라이스 치즈나 모짜렐라 치즈를 올리고 잠깐 뚜껑을 덮어 살짝 녹여주면 고소한 치즈 김치볶음밥이 됩니다.',
+      },
+      {
+        title: '📦 보관 방법',
+        body: '남은 볶음밥은 밀폐용기에 담아 냉장 보관 시 2일 이내, 냉동 보관 시 1개월 이내 섭취를 권장해요. 재가열은 전자레인지에 물 한 스푼을 뿌려 촉촉하게 데워주세요.',
+      },
+    ];
+
+    function TipsSection() {
+      const [openIdx, setOpenIdx] = useState(null);
+      return (
+        <section aria-labelledby="tips-heading">
+          <h2 id="tips-heading" className="text-xl font-bold text-gray-800 mb-3">💡 알아두면 좋은 팁</h2>
+          <Card className="divide-y divide-orange-50 overflow-hidden">
+            {TIPS.map((tip, idx) => {
+              const isOpen = openIdx === idx;
+              return (
+                <div key={idx}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenIdx(isOpen ? null : idx)}
+                    aria-expanded={isOpen}
+                    className="w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-orange-50/60 transition"
+                  >
+                    <span className="font-semibold text-gray-800">{tip.title}</span>
+                    <svg
+                      className={`w-5 h-5 text-orange-500 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {isOpen && (
+                    <p className="px-4 pb-4 text-sm text-gray-600 leading-relaxed">{tip.body}</p>
+                  )}
+                </div>
+              );
+            })}
+          </Card>
+        </section>
+      );
+    }
+
+    function InfoBar() {
+      return (
+        <div className="flex flex-wrap gap-2 justify-center -mt-8 relative z-10">
+          <Badge color="gray">⏱️ 조리시간 15분</Badge>
+          <Badge color="gray">🔥 난이도 쉬움</Badge>
+          <Badge color="gray">🍽️ 기본 2인분</Badge>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🚀 App Component
+    // ========================================
+
+    function App() {
+      const [servings, setServings] = useState(BASE_SERVINGS);
+
+      return (
+        <div className="min-h-screen flex flex-col">
+          <Header />
+          <InfoBar />
+          <main className="flex-1 max-w-3xl w-full mx-auto px-5 py-10 space-y-8">
+            <ServingsSelector servings={servings} setServings={setServings} />
+            <IngredientsSection servings={servings} />
+            <StepsSection />
+            <TipsSection />
+          </main>
+          <Footer />
+        </div>
+      );
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
